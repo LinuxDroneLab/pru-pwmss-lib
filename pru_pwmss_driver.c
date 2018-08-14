@@ -2,7 +2,7 @@
  * pru_pwmss_driver.c
  *
  *  Created on: 12 ago 2018
- *      Author: andrea
+ *      Author: Andrea Lambruschini
  */
 #include <include/pru_pwmss_driver.h>
 #include <sys_pwmss.h>
@@ -10,7 +10,8 @@
 /*
  * from http://theduchy.ualr.edu/?p=299
  *
- * Do NOT use CLKCONFIG (ePWMCLK_EN) to try to turn the PWM on/off.  Once that clock is turned off, it cannot be turned back on from within the PRU.
+ * Do NOT use CLKCONFIG (ePWMCLK_EN) to try to turn the PWM on/off.
+ * Once that clock is turned off, it cannot be turned back on from within the PRU.
  * The CM_PER register (0x44E0 0000) contains three important registers:
  *      epwmss0clkctrl (0xCC),
  *      epwmss1clkctrl (0xD4),
@@ -18,7 +19,9 @@
  * which have to be set up in order for the pwm to work at all.
  * These registers can be twiddled to turn the pwm off and on.
  *
- * In turning the PWM off, it’s nice to also force the module to go low.  This can be done through the ACQTLA/B register.  I need to figure this out again.  Not going to happen tonight given how tired I am.
+ * In turning the PWM off, it’s nice to also force the module to go low.
+ * This can be done through the ACQTLA/B register.
+ * I need to figure this out again.  Not going to happen tonight given how tired I am.
  * Another register that has an interesting module is CONTROL_MODULE (0x44E1 0000).
  * This register has pwmss_ctrl (0x664), which has the bits timebase_clock_enable for pwm 0, 1, 2.
  * I have not checked it out yet, but it could be a necessary register.
@@ -47,7 +50,7 @@ uint32_t* CM_PER_PWMCSS_CLKCTRL[3] = {(uint32_t*) 0x44E000D4, (uint32_t*) 0x44E0
 uint32_t* PWMSS_CTRL_REG = (uint32_t*)0x44E10664;
 
 uint8_t pru_pwmss_lib_initialized[3] = {0,0,0};
-PruPwmssLibConfig* pru_pwmss_lib_config[3] = {0};
+PruPwmssLibConfig* pru_pwmss_lib_config = 0;
 unsigned char pru_pwmss_lib_cmd_rsp[4] = { 0 };
 
 /***********************************************************************
@@ -81,7 +84,8 @@ uint8_t pru_pwmss_lib_Init(uint8_t pwmssDevice) {
     /*
      * A T T E N Z I O N E!
      * https://beagleboard.org/discuss?place=msg%2Fbeagleboard%2FLZhL4S9taic%2FK4HCC6d_AgAJ
-     * Per utilizare pwmss da PRU con kernel 4 linux è necessario modificare am33xx-clocks.dtsi nel modo indicato sotto
+     * Per utilizzare pwmss da PRU con kernel 4 linux è necessario modificare
+     * la configurazione dei ehrpwmX_tbclk aggiungendo ti,set-bit-to-disable
      *
      *     ehrpwm0_tbclk: ehrpwm0_tbclk@44e10664 {
         #clock-cells = <0>;
@@ -113,12 +117,11 @@ uint8_t pru_pwmss_lib_Init(uint8_t pwmssDevice) {
     La soluzione è riferita da questa discussione:
     https://groups.google.com/forum/#!msg/beagleboard/eVgyVduT288/XgsiUiNiBwAJ
 
-    La modifica è stata fatta su am35x-boneblack-uboot.dts e funziona correttamente.
+    La modifica l'ho stata fatta su am335x-boneblack-uboot.dts e funziona correttamente.
 
      */
     /* PinMux configured with device tree */
     (*(CM_PER_PWMCSS_CLKCTRL[pwmssDevice])) = 2; /* enable module */
-    *PWMSS_CTRL_REG = 7; // enable  pwmss_ctrl Register: bits pwmss2_tbclke, pwmss1_tbclke, pwmss0_tbclke
 
     PRU_PWMSS[pwmssDevice]->CLKCONFIG_bit.EPWMCLK_EN = 0b1; /* enable clock */
     PRU_PWMSS[pwmssDevice]->EPWM_TBCTL = 0xFFFF & (0x8000 | 0x0030 | 0x1400); /* FREE RUN on, SUNC0SEL off, CLKDIV = 5 (3.125MHz) */
@@ -126,14 +129,15 @@ uint8_t pru_pwmss_lib_Init(uint8_t pwmssDevice) {
     /* Frequenza PWM */
     /* SYSCLKOUT=100MHz, HSPCLKDIV=0
      * CLKDIV = 5 => TBCLK = 100MHz/32 = 3.125MHz
-     * PWMPERIOD = (TBPRD + 1)/TBCLK;
+     * PWMPERIOD = (TBPRD + 1)/TBCLK; a 50Hz deve valere 20000us
      * per avere un PWMPERIOD di 20ms serve TBPRD = 20000us * TBCLK - 1 = 20000us * 3.125MHz - 1 = 62499;
      * */
     PRU_PWMSS[pwmssDevice]->EPWM_TBPRD = 0xF423; // 62499
     PRU_PWMSS[pwmssDevice]->EPWM_AQCTLA = 0xFFFF & (0x0002 | 0x0030 ); // ZRO = 2, CAU = 3, il resto = 0
     PRU_PWMSS[pwmssDevice]->EPWM_AQCTLB = 0xFFFF & (0x0002 | 0x0030 ); // ZRO = 2, CAU = 3, il resto = 0
-    PRU_PWMSS[pwmssDevice]->EPWM_CMPA = 16250;
-    PRU_PWMSS[pwmssDevice]->EPWM_CMPB = 16250;
+    PRU_PWMSS[pwmssDevice]->EPWM_CMPA = 3125; // 5% of period
+    PRU_PWMSS[pwmssDevice]->EPWM_CMPB = 3125; // 5% of period
+    *PWMSS_CTRL_REG = 7; // enable  pwmss_ctrl Register: bits pwmss2_tbclk, pwmss1_tbclke, pwmss0_tbclke
     pru_pwmss_lib_initialized[pwmssDevice] = 1;
     return 0;
 }
@@ -166,14 +170,19 @@ uint8_t pru_pwmss_lib_ExecCmd(unsigned char* cmd, uint8_t numBytes)
             pru_pwmss_lib_cmd_rsp[0] = PRU_PWMSS_LIB_CMD_ID;
             pru_pwmss_lib_cmd_rsp[1] = PRU_PWMSS_LIB_CMD_START_RSP;
             if(numBytes >= 3) {
-                pru_pwmss_lib_Init(cmd[2]);
-                pru_pwmss_lib_cmd_rsp[2] = cmd[2]; // pwmssDevice
-                pru_pwmss_lib_cmd_rsp[3] = pru_pwmss_lib_Start(cmd[2]); // result
-                return (pru_pwmss_lib_config[cmd[2]]->onStart)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
+                uint8_t i = 0;
+                pru_pwmss_lib_cmd_rsp[2] = cmd[2]; // pwmssDevices to start
+                pru_pwmss_lib_cmd_rsp[3] = 1;
+                for(i = 0; i < 3; i++) {
+                    if(cmd[2] & (1 << i)) {
+                        pru_pwmss_lib_cmd_rsp[3] &= pru_pwmss_lib_Start(i); // result
+                    }
+                }
+                return (pru_pwmss_lib_config->onStart)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
             } else {
-                pru_pwmss_lib_cmd_rsp[2] = 0xFF; // pwmssDevice
+                pru_pwmss_lib_cmd_rsp[2] = 0xFF; // error
                 pru_pwmss_lib_cmd_rsp[3] = 0; // result KO
-                return (pru_pwmss_lib_config[0]->onStart)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
+                return (pru_pwmss_lib_config->onStart)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
             }
         }
         case (PRU_PWMSS_LIB_CMD_STOP):
@@ -181,58 +190,103 @@ uint8_t pru_pwmss_lib_ExecCmd(unsigned char* cmd, uint8_t numBytes)
             pru_pwmss_lib_cmd_rsp[0] = PRU_PWMSS_LIB_CMD_ID;
             pru_pwmss_lib_cmd_rsp[1] = PRU_PWMSS_LIB_CMD_STOP_RSP;
             if(numBytes >= 3) {
-                pru_pwmss_lib_cmd_rsp[2] = cmd[2]; // pwmssDevice
-                pru_pwmss_lib_cmd_rsp[3] = pru_pwmss_lib_Stop(cmd[2]); // OK
-                return (pru_pwmss_lib_config[cmd[2]]->onStop)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
+                uint8_t i = 0;
+                pru_pwmss_lib_cmd_rsp[2] = cmd[2]; // pwmssDevices to stop
+                pru_pwmss_lib_cmd_rsp[3] = 1;
+                for(i = 0; i < 3; i++) {
+                    if(cmd[2] & (1 << i)) {
+                        pru_pwmss_lib_cmd_rsp[3] &= pru_pwmss_lib_Stop(i); // result
+                    }
+                }
+                return (pru_pwmss_lib_config->onStop)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
             } else {
-                pru_pwmss_lib_cmd_rsp[2] = 0xFF; // pwmssDevice
+                pru_pwmss_lib_cmd_rsp[2] = 0xFF; // error
                 pru_pwmss_lib_cmd_rsp[3] = 0; // KO
-                return (pru_pwmss_lib_config[0]->onStop)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
+                return (pru_pwmss_lib_config->onStop)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
             }
         }
         case (PRU_PWMSS_LIB_CMD_SET_DATA):
         {
             pru_pwmss_lib_cmd_rsp[0] = PRU_PWMSS_LIB_CMD_ID;
             pru_pwmss_lib_cmd_rsp[1] = PRU_PWMSS_LIB_CMD_SET_DATA_RSP;
+            pru_pwmss_lib_cmd_rsp[2] = 0;
+            pru_pwmss_lib_cmd_rsp[3] = 1;
             if(numBytes >= 9) {
-                pru_pwmss_lib_cmd_rsp[2] = cmd[2]; // pwmssDevice
-                uint16_t* data = (uint16_t*)(cmd+3);
-                pru_pwmss_lib_cmd_rsp[3] = pru_pwmss_lib_SetData(cmd[2], data[0], data[1], data[2]); // result
-                return (pru_pwmss_lib_config[cmd[2]]->onSetData)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
+                /*
+                 * 1 byte: deviceId
+                 * 2 bytes: period
+                 * 2 bytes: cmpA
+                 * 2 bytes: cmpB
+                 * da uno a tre volte
+                 */
+                uint8_t groups = (numBytes -2)/7;
+                uint8_t i = 0;
+                for(i = 0; i < groups; i++) {
+                    uint16_t* data = (uint16_t*)(cmd + (i*7) + 3);
+                    uint8_t numDev = (uint8_t)(*(cmd + (i*7) + 2));
+                    pru_pwmss_lib_cmd_rsp[2] |= (1 << numDev);
+                    pru_pwmss_lib_cmd_rsp[3] &= pru_pwmss_lib_SetData(numDev, data[0], data[1], data[2]); // result
+                }
+                return (pru_pwmss_lib_config->onSetData)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
             } else {
-                pru_pwmss_lib_cmd_rsp[2] = 0xFF; // pwmssDevice
+                pru_pwmss_lib_cmd_rsp[2] = 0xFF; // error
                 pru_pwmss_lib_cmd_rsp[3] = 0; // KO
-                return (pru_pwmss_lib_config[0]->onSetData)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
+                return (pru_pwmss_lib_config->onSetData)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
             }
         }
         case (PRU_PWMSS_LIB_CMD_SET_DUTY):
         {
             pru_pwmss_lib_cmd_rsp[0] = PRU_PWMSS_LIB_CMD_ID;
             pru_pwmss_lib_cmd_rsp[1] = PRU_PWMSS_LIB_CMD_SET_DUTY_RSP;
+            pru_pwmss_lib_cmd_rsp[2] = 0; //
+            pru_pwmss_lib_cmd_rsp[3] = 1;
             if(numBytes >= 7) {
-                pru_pwmss_lib_cmd_rsp[2] = cmd[2]; // pwmssDevice
-                uint16_t* data = (uint16_t*)(cmd+3);
-                pru_pwmss_lib_cmd_rsp[3] = pru_pwmss_lib_SetDuty(cmd[2], data[1], data[2]); // result
-                return (pru_pwmss_lib_config[cmd[2]]->onSetDuty)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
+                /*
+                 * 1 byte: deviceId
+                 * 2 bytes: cmpA
+                 * 2 bytes: cmpB
+                 * da uno a tre volte
+                 */
+                uint8_t groups = (numBytes -2)/5;
+                uint8_t i = 0;
+                for(i = 0; i < groups; i++) {
+                    uint16_t* data = (uint16_t*)(cmd + (i*5) + 3);
+                    uint8_t numDev = (uint8_t)(*(cmd + (i*5) + 2));
+                    pru_pwmss_lib_cmd_rsp[2] |= (1 << numDev);
+                    pru_pwmss_lib_cmd_rsp[3] &= pru_pwmss_lib_SetDuty(numDev, data[1], data[2]); // result
+                }
+                return (pru_pwmss_lib_config->onSetDuty)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
             } else {
-                pru_pwmss_lib_cmd_rsp[2] = 0xFF; // pwmssDevice
+                pru_pwmss_lib_cmd_rsp[2] = 0xFF; // error
                 pru_pwmss_lib_cmd_rsp[3] = 0; // KO
-                return (pru_pwmss_lib_config[0]->onSetDuty)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
+                return (pru_pwmss_lib_config->onSetDuty)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
             }
         }
         case (PRU_PWMSS_LIB_CMD_SET_PERIOD):
         {
             if(numBytes >= 5) {
+                /*
+                 * 1 byte: deviceId
+                 * 2 bytes: period
+                 * da uno a tre volte
+                 */
                 pru_pwmss_lib_cmd_rsp[0] = PRU_PWMSS_LIB_CMD_ID;
                 pru_pwmss_lib_cmd_rsp[1] = PRU_PWMSS_LIB_CMD_SET_PERIOD_RSP;
-                pru_pwmss_lib_cmd_rsp[2] = cmd[2]; // pwmssDevice
-                uint16_t* data = (uint16_t*)(cmd+3);
-                pru_pwmss_lib_cmd_rsp[3] = pru_pwmss_lib_SetPeriod(cmd[2], data[1]); // result
-                return (pru_pwmss_lib_config[cmd[2]]->onSetPeriod)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
+                pru_pwmss_lib_cmd_rsp[2] = 0; //
+                pru_pwmss_lib_cmd_rsp[3] = 1;
+                uint8_t groups = (numBytes -2)/3;
+                uint8_t i = 0;
+                for(i = 0; i < groups; i++) {
+                    uint16_t* data = (uint16_t*)(cmd + (i*3) + 3);
+                    uint8_t numDev = (uint8_t)(*(cmd + (i*3) + 2));
+                    pru_pwmss_lib_cmd_rsp[2] |= (1 << numDev);
+                    pru_pwmss_lib_cmd_rsp[3] &= pru_pwmss_lib_SetPeriod(cmd[2], data[1]); // result
+                }
+                return (pru_pwmss_lib_config->onSetPeriod)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
             } else {
-                pru_pwmss_lib_cmd_rsp[2] = 0xFF; // pwmssDevice
+                pru_pwmss_lib_cmd_rsp[2] = 0xFF; // error
                 pru_pwmss_lib_cmd_rsp[3] = 0; // KO
-                return (pru_pwmss_lib_config[0]->onSetPeriod)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
+                return (pru_pwmss_lib_config->onSetPeriod)(pru_pwmss_lib_cmd_rsp, 4) && pru_pwmss_lib_cmd_rsp[3];
             }
         }
         }
@@ -257,9 +311,7 @@ uint8_t pru_pwmss_lib_Pulse(uint8_t pwmssDevice)
 }
 uint8_t pru_pwmss_lib_Conf(PruPwmssLibConfig* config)
 {
-    pru_pwmss_lib_config[0] = config;
-    pru_pwmss_lib_config[1] = config + 1;
-    pru_pwmss_lib_config[2] = config + 2;
+    pru_pwmss_lib_config = config;
     return 1;
 }
 uint8_t pru_pwmss_lib_SetData(uint8_t pwmssDevice, uint16_t period, uint16_t duA, uint16_t duB) {
