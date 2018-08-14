@@ -135,8 +135,8 @@ uint8_t pru_pwmss_lib_Init(uint8_t pwmssDevice) {
     PRU_PWMSS[pwmssDevice]->EPWM_TBPRD = 0xF423; // 62499
     PRU_PWMSS[pwmssDevice]->EPWM_AQCTLA = 0xFFFF & (0x0002 | 0x0030 ); // ZRO = 2, CAU = 3, il resto = 0
     PRU_PWMSS[pwmssDevice]->EPWM_AQCTLB = 0xFFFF & (0x0002 | 0x0300 ); // ZRO = 2, CBU = 3, il resto = 0
-    PRU_PWMSS[pwmssDevice]->EPWM_CMPA = 3125; // 5% of period
-    PRU_PWMSS[pwmssDevice]->EPWM_CMPB = 3125; // 5% of period
+    PRU_PWMSS[pwmssDevice]->EPWM_CMPA = 0; //
+    PRU_PWMSS[pwmssDevice]->EPWM_CMPB = 0; //
     *PWMSS_CTRL_REG = 7; // enable  pwmss_ctrl Register: bits pwmss2_tbclk, pwmss1_tbclke, pwmss0_tbclke
     pru_pwmss_lib_initialized[pwmssDevice] = 1;
     return 0;

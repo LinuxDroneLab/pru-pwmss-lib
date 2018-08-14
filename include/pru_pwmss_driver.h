@@ -11,7 +11,7 @@
 #include <stdint.h>
 
 
-#define PRU_PWMSS_LIB_CMD_ID             0xFA
+#define PRU_PWMSS_LIB_CMD_ID             0xF0
 #define PRU_PWMSS_LIB_CMD_START          0x01
 #define PRU_PWMSS_LIB_CMD_START_RSP      0x02
 #define PRU_PWMSS_LIB_CMD_STOP           0x03
