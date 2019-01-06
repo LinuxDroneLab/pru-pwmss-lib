@@ -50,7 +50,7 @@ uint32_t* CM_PER_PWMCSS_CLKCTRL[3] = {(uint32_t*) 0x44E000D4, (uint32_t*) 0x44E0
 uint32_t* PWMSS_CTRL_REG = (uint32_t*)0x44E10664;
 
 uint8_t pru_pwmss_lib_initialized[3] = {0,0,0};
-PruPwmssLibConfig* pru_pwmss_lib_config = 0;
+PruDShotLibConfig* pru_pwmss_lib_config = 0;
 unsigned char pru_pwmss_lib_cmd_rsp[4] = { 0 };
 
 /***********************************************************************
@@ -121,7 +121,7 @@ uint8_t pru_pwmss_lib_Init(uint8_t pwmssDevice) {
 
      */
     /* PinMux configured with device tree */
-    (*(CM_PER_PWMCSS_CLKCTRL[pwmssDevice])) = 2; /* enable module */
+//    (*(CM_PER_PWMCSS_CLKCTRL[pwmssDevice])) = 2; /* enable module */
 
     PRU_PWMSS[pwmssDevice]->CLKCONFIG_bit.EPWMCLK_EN = 0b1; /* enable clock */
     PRU_PWMSS[pwmssDevice]->EPWM_TBCTL = 0xFFFF & (0x8000 | 0x0030 | 0x1400); /* FREE RUN on, SUNC0SEL off, CLKDIV = 5 (3.125MHz) */
@@ -309,7 +309,7 @@ uint8_t pru_pwmss_lib_Pulse(uint8_t pwmssDevice)
     }
     return 1;
 }
-uint8_t pru_pwmss_lib_Conf(PruPwmssLibConfig* config)
+uint8_t pru_pwmss_lib_Conf(PruDShotLibConfig* config)
 {
     pru_pwmss_lib_config = config;
     return 1;

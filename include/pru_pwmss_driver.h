@@ -31,14 +31,14 @@ typedef struct {
     uint8_t (*onSetDuty)(unsigned char* data, uint8_t dataBytes);
     uint8_t (*onSetPeriod)(unsigned char* data, uint8_t dataBytes);
     uint8_t (*onSetData)(unsigned char* data, uint8_t dataBytes);
-} PruPwmssLibConfig;
+} PruDShotLibConfig;
 
 uint8_t pru_pwmss_lib_IsConfigured(uint8_t pwmssDevice);
 uint8_t pru_pwmss_lib_IsInitialized(uint8_t pwmssDevice);
 uint8_t pru_pwmss_lib_IsRunning(uint8_t pwmssDevice);
 uint8_t pru_pwmss_lib_Init(uint8_t pwmssDevice);
 uint8_t pru_pwmss_lib_Pulse(uint8_t pwmssDevice);
-uint8_t pru_pwmss_lib_Conf(PruPwmssLibConfig* config);
+uint8_t pru_pwmss_lib_Conf(PruDShotLibConfig* config);
 uint8_t pru_pwmss_lib_SetData(uint8_t pwmssDevice, uint16_t period, uint16_t duA, uint16_t duB);
 uint8_t pru_pwmss_lib_SetDuty(uint8_t pwmssDevice, uint16_t duA, uint16_t duB);
 uint8_t pru_pwmss_lib_SetPeriod(uint8_t pwmssDevice, uint16_t period);
